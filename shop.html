@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shop — Zoro Luna</title>
+<meta name="description" content="Shop Zoro Luna tees, hoodies and essentials.">
+<meta name="theme-color" content="#f6f1e9">
+<link rel="icon" href="img/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("zl_theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="page-h has-bg"><img class="ph-bg" src="img/beach2.jpg" alt=""><div class="wrap"><p class="eyebrow">The Drop</p><h1>Shop <em class="gold">Zoro Luna</em></h1><p id="cnt"></p></div></div>
+<main><div class="wrap">
+  <div class="bar"><div class="tabs" id="tabs"></div>
+  <select class="sel" id="sort" aria-label="Sort"><option value="f">Featured</option><option value="lo">Price: low to high</option><option value="hi">Price: high to low</option></select></div>
+  <div class="grid" id="grid" style="margin-bottom:6rem"></div>
+</div></main>
+<script src="site.js"></script>
+<script>
+let cat="All";
+function pageInit(){
+  const q=new URLSearchParams(location.search).get("c"); if(CATS.includes(q)) cat=q;
+  $("#tabs").onclick=e=>{const c=e.target.dataset.c;if(c){cat=c;history.replaceState(null,"","?c="+c);draw()}};
+  $("#sort").onchange=draw; draw();
+}
+function draw(){
+  $("#tabs").innerHTML=CATS.map(c=>`<button class="tab ${c===cat?"on":""}" data-c="${c}">${c}</button>`).join("");
+  let a=PRODUCTS.filter(p=>cat==="All"||p.c===cat); const s=$("#sort").value;
+  if(s==="lo")a.sort((x,y)=>x.p-y.p); if(s==="hi")a.sort((x,y)=>y.p-x.p);
+  $("#grid").innerHTML=a.map(card).join(""); $("#cnt").textContent=a.length+" pieces";
+}
+</script>
+</body>
+</html>

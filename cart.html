@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your Bag — Zoro Luna</title>
+<meta name="description" content="Review your Zoro Luna bag.">
+<meta name="theme-color" content="#f6f1e9">
+<link rel="icon" href="img/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("zl_theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="page-h"><div class="wrap"><p class="eyebrow">Review</p><h1>Your <em class="gold">bag</em></h1></div></div>
+<main><div class="wrap" id="cp"></div></main>
+<script src="site.js"></script>
+<script>
+function pageInit(){ draw(); document.addEventListener("cart:change",draw) }
+function draw(){
+  const a=cart.items(), el=$("#cp");
+  if(!a.length){el.innerHTML='<div class="bigempty"><p>Your bag is empty.</p><a class="btn solid" href="shop.html">Continue shopping</a></div>';return}
+  const sub=cart.sub(), d=cart.discount(), sh=cart.shipping(), left=Math.max(0,SHIP_FREE-(sub-d)), pct=Math.min(100,(sub-d)/SHIP_FREE*100), cp=cart.coupon();
+  el.innerHTML=`<div class="cartpg"><div class="lines" id="lines">${a.map((x,k)=>lineHtml(x,k)).join("")}<div style="margin-top:1.6rem"><a class="btn ghost" href="shop.html">← Continue shopping</a></div></div>
+  <aside class="sum"><h3>Order summary</h3>
+    <div class="ship">${left?`Add <b>${inr(left)}</b> more for free shipping`:"You've unlocked free shipping ✦"}<i style="--w:${pct}%"></i></div>
+    <div class="r"><span>Subtotal</span><span>${inr(sub)}</span></div>
+    ${d?`<div class="r disc"><span>Coupon ${cp}</span><span>−${inr(d)}</span></div>`:""}
+    <div class="r"><span>Shipping</span><span>${sh?inr(sh):"Free"}</span></div>
+    <form class="cpn" id="cpn"><input id="cin" placeholder="Coupon code" value="${cp}" aria-label="Coupon"><button>${cp?"Update":"Apply"}</button></form>
+    <div class="msg" id="cmsg"></div>
+    <div class="r t"><span>Total</span><span>${inr(sub-d+sh)}</span></div>
+    <a class="btn solid block" href="checkout.html" style="margin-top:1.2rem">Checkout</a>
+    <p class="note">Cash on delivery adds ${inr(COD_FEE)}. Pay online to save ${PREPAID_OFF*100}%.</p>
+  </aside></div>`;
+  $("#lines").onclick=e=>{const b=e.target.closest("[data-a]");if(!b)return;const k=+b.dataset.k,it=cart.items()[k];b.dataset.a==="rm"?cart.remove(k):cart.setQty(k,it.qty+(b.dataset.a==="plus"?1:-1))};
+  $("#cpn").onsubmit=e=>{e.preventDefault();const v=$("#cin").value.trim().toUpperCase();
+    if(!v){store.set("zl_coupon","");draw();return}
+    if(COUPONS[v]){store.set("zl_coupon",v);draw()}else $("#cmsg").textContent="That code isn't valid."};
+}
+</script>
+</body>
+</html>

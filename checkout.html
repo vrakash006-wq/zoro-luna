@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Checkout — Zoro Luna</title>
+<meta name="description" content="Checkout.">
+<meta name="theme-color" content="#f6f1e9">
+<link rel="icon" href="img/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("zl_theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="page-h"><div class="wrap"><p class="eyebrow">Almost there</p><h1><em class="gold">Checkout</em></h1></div></div>
+<main><div class="wrap" id="ck"></div></main>
+<script src="site.js"></script>
+<script>
+let pay="cod";
+const STATES=["Andhra Pradesh","Assam","Bihar","Chandigarh","Chhattisgarh","Delhi","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Odisha","Puducherry","Punjab","Rajasthan","Tamil Nadu","Telangana","Uttar Pradesh","Uttarakhand","West Bengal","Other"];
+function pageInit(){
+  const a=cart.items();
+  if(!a.length){$("#ck").innerHTML='<div class="bigempty"><p>Your bag is empty.</p><a class="btn solid" href="shop.html">Continue shopping</a></div>';return}
+  const saved=store.get("zl_cust",{});
+  const v=k=>esc(saved[k]||"");
+  $("#ck").innerHTML=`<form class="chk" id="f" novalidate>
+  <div>
+    <fieldset class="fs"><legend>Contact</legend><div class="f2">
+      <label class="fld">Full name<input name="name" required autocomplete="name" value="${v("name")}"></label>
+      <label class="fld">Mobile<input name="phone" required inputmode="numeric" pattern="[6-9][0-9]{9}" maxlength="10" placeholder="10-digit number" autocomplete="tel" value="${v("phone")}"></label>
+      <label class="fld full">Email<input name="email" type="email" required autocomplete="email" value="${v("email")}"></label></div></fieldset>
+    <fieldset class="fs"><legend>Delivery address</legend><div class="f2">
+      <label class="fld full">Address<input name="addr" required autocomplete="street-address" placeholder="House no., street, area" value="${v("addr")}"></label>
+      <label class="fld">City<input name="city" required autocomplete="address-level2" value="${v("city")}"></label>
+      <label class="fld">Pincode<input name="pin" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="postal-code" value="${v("pin")}"></label>
+      <label class="fld full">State<select name="state" required><option value="">Select state</option>${STATES.map(s=>`<option ${saved.state===s?"selected":""}>${s}</option>`).join("")}</select></label></div></fieldset>
+    <fieldset class="fs"><legend>Payment</legend>
+      <label class="pay"><input type="radio" name="pay" value="cod" checked><span><b>Cash on delivery</b><small>Pay when it arrives · +${inr(COD_FEE)} handling</small></span></label>
+      <label class="pay"><input type="radio" name="pay" value="online"><span><b>UPI / Card / Net banking</b><small>Save ${PREPAID_OFF*100}% · secure payment link sent on WhatsApp</small></span></label>
+      <p class="note">Orders are confirmed once you send the details on WhatsApp in the next step.</p></fieldset>
+    <div class="msg" id="fmsg"></div>
+  </div>
+  <aside class="sum"><h3>Your order</h3><div class="mini">${a.map(x=>{const p=prod(x.id);return `<div class="it"><img src="${imgs(p)[0]}" alt="" style="width:64px;aspect-ratio:4/5;object-fit:cover;border:1px solid var(--line)"><div class="it-i"><span style="font-family:var(--serif);font-size:1.15rem">${esc(p.n)}</span><small>Size ${esc(x.size)} · Qty ${x.qty}</small></div><div class="price">${inr(p.p*x.qty)}</div></div>`}).join("")}</div>
+    <div id="tots" style="margin-top:1rem"></div>
+    <button class="btn solid block" type="submit" style="margin-top:1.2rem">Place order</button>
+    <p class="note"><a href="cart.html" style="text-decoration:underline">Edit bag</a></p></aside></form>`;
+  const tots=()=>{const sub=cart.sub(),d=cart.discount(),base=sub-d,pre=pay==="online"?Math.round(base*PREPAID_OFF):0,sh=cart.shipping(),cod=pay==="cod"?COD_FEE:0;
+    $("#tots").innerHTML=`<div class="r"><span>Subtotal</span><span>${inr(sub)}</span></div>${d?`<div class="r disc"><span>Coupon ${cart.coupon()}</span><span>−${inr(d)}</span></div>`:""}${pre?`<div class="r disc"><span>Prepaid saving</span><span>−${inr(pre)}</span></div>`:""}<div class="r"><span>Shipping</span><span>${sh?inr(sh):"Free"}</span></div>${cod?`<div class="r"><span>COD fee</span><span>${inr(cod)}</span></div>`:""}<div class="r t"><span>Total</span><span>${inr(cart.total(pay))}</span></div>`};
+  tots();
+  $("#f").addEventListener("change",e=>{if(e.target.name==="pay"){pay=e.target.value;tots()}});
+  $("#f").onsubmit=e=>{e.preventDefault();const f=e.target;
+    if(!f.checkValidity()){const bad=f.querySelector("input:invalid,select:invalid");$("#fmsg").textContent="Please check the highlighted fields: "+(bad.closest(".fld")?.firstChild.textContent||"form");bad.focus();return}
+    const c=Object.fromEntries(new FormData(f)); store.set("zl_cust",{name:c.name,phone:c.phone,email:c.email,addr:c.addr,city:c.city,pin:c.pin,state:c.state});
+    const order={id:"ZL"+Date.now().toString().slice(-7),date:new Date().toISOString(),pay,cust:c,coupon:cart.coupon(),total:cart.total(pay),
+      lines:cart.items().map(x=>({n:prod(x.id).n,size:x.size,qty:x.qty,p:prod(x.id).p}))};
+    const orders=store.get("zl_orders",[]);orders.push(order);store.set("zl_orders",orders);
+    cart.clear(); store.set("zl_coupon",""); done(order)};
+}
+function done(o){
+  const msg=`Hi Zoro Luna! New order ${o.id}\n\n`+o.lines.map(l=>`• ${l.n} (${l.size}) × ${l.qty} — ${inr(l.p*l.qty)}`).join("\n")+`\n\nTotal: ${inr(o.total)} (${o.pay==="cod"?"Cash on delivery":"Online payment"})\n\nName: ${o.cust.name}\nPhone: ${o.cust.phone}\nAddress: ${o.cust.addr}, ${o.cust.city}, ${o.cust.state} ${o.cust.pin}`;
+  document.title="Order placed — Zoro Luna"; scrollTo(0,0);
+  $("#ck").innerHTML=`<div class="thanks"><div class="tick">✓</div><h1>Thank you, ${esc(o.cust.name.split(" ")[0])}</h1><p>Your order is saved. One last step — send it to us on WhatsApp so we can confirm and start making your pieces.</p><div class="oid">${o.id}</div><br>
+  <a class="btn solid" target="_blank" rel="noopener" href="https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}">Confirm on WhatsApp</a>
+  <p style="margin-top:1.6rem">Total ${inr(o.total)} · ${o.pay==="cod"?"Pay on delivery":"We'll send a secure payment link"}</p><a class="btn ghost" href="shop.html" style="margin-top:1rem">Continue shopping</a></div>`;
+}
+</script>
+</body>
+</html>

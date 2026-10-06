@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Product — Zoro Luna</title>
+<meta name="description" content="Zoro Luna product.">
+<meta name="theme-color" content="#f6f1e9">
+<link rel="icon" href="img/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("zl_theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<main><div class="wrap" id="pd"></div></main>
+<script src="site.js"></script>
+<script>
+let state={size:"",qty:1,img:0};
+function pageInit(){
+  const p=prod(new URLSearchParams(location.search).get("id"));
+  if(!p){location.replace("shop.html");return}
+  document.title=p.n+" — Zoro Luna";
+  const im=imgs(p), off=Math.round((1-p.p/p.o)*100), rel=PRODUCTS.filter(x=>x.c===p.c&&x.id!==p.id).concat(PRODUCTS.filter(x=>x.c!==p.c)).slice(0,4);
+  $("#pd").innerHTML=`
+  <div class="crumbs"><a href="index.html">Home</a> / <a href="shop.html?c=${p.c}">${p.c}</a> / ${esc(p.n)}</div>
+  <div class="pd">
+    <div class="gal"><div class="thumbs">${im.map((u,k)=>`<button data-k="${k}" class="${k?"":"on"}" aria-label="Image ${k+1}"><img src="${u}" alt=""></button>`).join("")}</div>
+      <div class="main"><img id="mainimg" src="${im[0]}" alt="${esc(p.n)}"></div></div>
+    <div class="pi">
+      <p class="eyebrow">${p.c}${p.b?" · "+esc(p.b):""}</p>
+      <h1>${esc(p.n)}</h1>
+      <div class="price">${inr(p.p)}<s>${inr(p.o)}</s><span class="save">Save ${off}%</span></div>
+      <p class="desc">${esc(p.d)}</p>
+      <div class="lbl"><span>Size</span><a href="info.html#size">Size guide</a></div>
+      <div class="sizes" id="sizes">${SIZES.map(s=>`<button data-s="${s}">${s}</button>`).join("")}</div>
+      <div class="msg" id="msg"></div>
+      <div class="lbl" style="margin-top:1rem"><span>Quantity</span></div>
+      <div class="qty lg"><button id="qm" aria-label="Decrease">−</button><span id="qv">1</span><button id="qp" aria-label="Increase">+</button></div>
+      <div class="buy"><button class="btn solid" id="add">Add to bag</button><button class="btn" id="now">Buy now</button></div>
+      <a class="btn ghost block" target="_blank" rel="noopener" href="https://wa.me/${WHATSAPP}?text=${encodeURIComponent("Hi Zoro Luna, I have a question about "+p.n)}">Ask on WhatsApp</a>
+      <div class="trust"><div><b>3–5 days</b>Delivery</div><div><b>7 days</b>Size exchange</div><div><b>COD</b>Available</div></div>
+      <details open><summary>Details</summary><ul><li>Fabric: ${esc(p.fab)}</li><li>Fit: ${esc(p.fit)}</li><li>Made to order, pre-shrunk and bio-washed</li><li>Premium, long-lasting print</li></ul></details>
+      <details><summary>Shipping &amp; returns</summary><p>Dispatched in 2–3 working days, delivered in 3–5 days across India. Free shipping above ${inr(SHIP_FREE)}. Size exchange within 7 days of delivery.</p></details>
+      <details><summary>Care</summary><p>Machine wash cold, inside out. Do not bleach. Tumble dry low or line dry. Iron on reverse.</p></details>
+    </div>
+  </div>
+  <div class="head" style="margin-top:2rem"><div><p class="eyebrow">You may also love</p><h2 style="font-size:clamp(2rem,4vw,3rem)">Complete the look</h2></div></div>
+  <div class="grid" style="margin-bottom:6rem">${rel.map(card).join("")}</div>
+  <div class="stick"><div class="price">${inr(p.p)}</div><button class="btn solid" id="add2">Add to bag</button></div>`;
+  const pick=()=>{ if(!state.size){ $("#sizes").classList.add("err"); $("#msg").textContent="Please select a size."; $("#sizes").scrollIntoView({block:"center",behavior:"smooth"}); return false } return true };
+  $("#sizes").onclick=e=>{const s=e.target.dataset.s;if(!s)return;state.size=s;$$("#sizes button").forEach(b=>b.classList.toggle("on",b.dataset.s===s));$("#sizes").classList.remove("err");$("#msg").textContent=""};
+  $(".thumbs").onclick=e=>{const b=e.target.closest("button");if(!b)return;$("#mainimg").src=im[b.dataset.k];$$(".thumbs button").forEach(x=>x.classList.toggle("on",x===b))};
+  $("#qm").onclick=()=>{state.qty=Math.max(1,state.qty-1);$("#qv").textContent=state.qty};
+  $("#qp").onclick=()=>{state.qty=Math.min(10,state.qty+1);$("#qv").textContent=state.qty};
+  const add=()=>{ if(!pick())return false; cart.add(p.id,state.size,state.qty); return true };
+  $("#add").onclick=$("#add2").onclick=()=>{ if(add()) openBag() };
+  $("#now").onclick=()=>{ if(add()) location.href="checkout.html" };
+}
+</script>
+</body>
+</html>
