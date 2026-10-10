@@ -16,6 +16,7 @@
 <body>
 <div class="page-h"><div class="wrap"><p class="eyebrow">Almost there</p><h1><em class="gold">Checkout</em></h1></div></div>
 <main><div class="wrap" id="ck"></div></main>
+<script src="config.js"></script>
 <script src="site.js"></script>
 <script>
 let pay="cod";
@@ -56,7 +57,7 @@ function pageInit(){
     const order={id:"ZL"+Date.now().toString().slice(-7),date:new Date().toISOString(),pay,cust:c,coupon:cart.coupon(),total:cart.total(pay),
       lines:cart.items().map(x=>({n:prod(x.id).n,size:x.size,qty:x.qty,p:prod(x.id).p}))};
     const orders=store.get("zl_orders",[]);orders.push(order);store.set("zl_orders",orders);
-    cart.clear(); store.set("zl_coupon",""); done(order)};
+    orderSync.send(order); cart.clear(); store.set("zl_coupon",""); done(order)};
 }
 function done(o){
   const msg=`Hi Zoro Luna! New order ${o.id}\n\n`+o.lines.map(l=>`• ${l.n} (${l.size}) × ${l.qty} — ${inr(l.p*l.qty)}`).join("\n")+`\n\nTotal: ${inr(o.total)} (${o.pay==="cod"?"Cash on delivery":"Online payment"})\n\nName: ${o.cust.name}\nPhone: ${o.cust.phone}\nAddress: ${o.cust.addr}, ${o.cust.city}, ${o.cust.state} ${o.cust.pin}`;

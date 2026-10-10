@@ -1,5 +1,4 @@
 /* ===== Zoro Luna — shared data, cart and page chrome ===== */
-const WHATSAPP = "910000000000"; // EDIT: your number with country code, no +
 const SHIP_FREE = 1999, SHIP_FEE = 99, COD_FEE = 50, PREPAID_OFF = 0.05;
 const SIZES = ["S", "M", "L", "XL", "XXL"];
 const COUPONS = { ZLUNA10: 0.10, WELCOME5: 0.05 };
@@ -52,6 +51,26 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;"
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch { return d } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+};
+
+/* ===== order sync (Google Sheet backend) ===== */
+const orderSync = {
+  flat(o) {
+    const c = o.cust || {};
+    return { id: o.id, date: o.date, status: "New", name: c.name, phone: c.phone, email: c.email, addr: c.addr, city: c.city, pin: c.pin, state: c.state,
+      pay: o.pay, coupon: o.coupon || "", total: o.total, items: o.lines, tracking: "", notes: "" };
+  },
+  async send(o) {
+    if (typeof ORDERS_API === "undefined" || !ORDERS_API) return false;
+    try {
+      const r = await fetch(ORDERS_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "order", order: this.flat(o), hp: "" }) });
+      const j = await r.json(); if (!j.ok && j.error !== "duplicate") throw new Error(j.error);
+      return true;
+    } catch (e) {
+      const q = store.get("zl_outbox", []); if (!q.find(x => x.id === o.id)) q.push(o); store.set("zl_outbox", q); return false;
+    }
+  },
+  async flush() { const q = store.get("zl_outbox", []); if (!q.length) return; store.set("zl_outbox", []); for (const o of q) await this.send(o) }
 };
 
 /* ===== cart ===== */
@@ -158,4 +177,4 @@ function initFx() {
   }), { threshold: .25 });
   $$("video[data-lazy]").forEach(v => vo.observe(v));
 }
-document.addEventListener("DOMContentLoaded", () => { renderChrome(); window.pageInit && pageInit(); initFx() });
+document.addEventListener("DOMContentLoaded", () => { renderChrome(); window.pageInit && pageInit(); initFx(); orderSync.flush() });
