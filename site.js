@@ -60,9 +60,13 @@ const orderSync = {
     return { id: o.id, date: o.date, status: "New", name: c.name, phone: c.phone, email: c.email, addr: c.addr, city: c.city, pin: c.pin, state: c.state,
       pay: o.pay, coupon: o.coupon || "", total: o.total, items: o.lines, tracking: "", notes: "" };
   },
-  async post(body) {
-    const r = await fetch(ORDERS_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
-    return r.json();
+  async post(body, tries = 3) {                       // Google occasionally returns a cold-start error page: retry
+    for (let i = 0; ; i++) {
+      try {
+        const r = await fetch(ORDERS_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+        return await r.json();
+      } catch (e) { if (i >= tries - 1) throw e; await new Promise(res => setTimeout(res, 700 * (i + 1))) }
+    }
   },
   async send(o) {
     if (typeof ORDERS_API === "undefined" || !ORDERS_API) return false;
