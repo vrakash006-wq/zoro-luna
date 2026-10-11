@@ -39,8 +39,8 @@ function pageInit(){
       <label class="fld full">State<select name="state" required><option value="">Select state</option>${STATES.map(s=>`<option ${saved.state===s?"selected":""}>${s}</option>`).join("")}</select></label></div></fieldset>
     <fieldset class="fs"><legend>Payment</legend>
       <label class="pay"><input type="radio" name="pay" value="cod" checked><span><b>Cash on delivery</b><small>Pay when it arrives · +${inr(COD_FEE)} handling</small></span></label>
-      <label class="pay"><input type="radio" name="pay" value="online"><span><b>UPI / Card / Net banking</b><small>Save ${PREPAID_OFF*100}% · secure payment link sent on WhatsApp</small></span></label>
-      <p class="note">Orders are confirmed once you send the details on WhatsApp in the next step.</p></fieldset>
+      <label class="pay"><input type="radio" name="pay" value="online"><span><b>UPI / Cards / Net banking</b><small>Save ${PREPAID_OFF*100}% · secure payment by Razorpay</small></span></label>
+      <p class="note">Online payments are confirmed instantly. For cash on delivery, you'll send the order on WhatsApp in the next step.</p></fieldset>
     <div class="msg" id="fmsg"></div>
   </div>
   <aside class="sum"><h3>Your order</h3><div class="mini">${a.map(x=>{const p=prod(x.id);return `<div class="it"><img src="${imgs(p)[0]}" alt="" style="width:64px;aspect-ratio:4/5;object-fit:cover;border:1px solid var(--line)"><div class="it-i"><span style="font-family:var(--serif);font-size:1.15rem">${esc(p.n)}</span><small>Size ${esc(x.size)} · Qty ${x.qty}</small></div><div class="price">${inr(p.p*x.qty)}</div></div>`}).join("")}</div>
@@ -51,20 +51,54 @@ function pageInit(){
     $("#tots").innerHTML=`<div class="r"><span>Subtotal</span><span>${inr(sub)}</span></div>${d?`<div class="r disc"><span>Coupon ${cart.coupon()}</span><span>−${inr(d)}</span></div>`:""}${pre?`<div class="r disc"><span>Prepaid saving</span><span>−${inr(pre)}</span></div>`:""}<div class="r"><span>Shipping</span><span>${sh?inr(sh):"Free"}</span></div>${cod?`<div class="r"><span>COD fee</span><span>${inr(cod)}</span></div>`:""}<div class="r t"><span>Total</span><span>${inr(cart.total(pay))}</span></div>`};
   tots();
   $("#f").addEventListener("change",e=>{if(e.target.name==="pay"){pay=e.target.value;tots()}});
-  $("#f").onsubmit=e=>{e.preventDefault();const f=e.target;
+  $("#f").onsubmit=async e=>{e.preventDefault();const f=e.target;
     if(!f.checkValidity()){const bad=f.querySelector("input:invalid,select:invalid");$("#fmsg").textContent="Please check the highlighted fields: "+(bad.closest(".fld")?.firstChild.textContent||"form");bad.focus();return}
     const c=Object.fromEntries(new FormData(f)); store.set("zl_cust",{name:c.name,phone:c.phone,email:c.email,addr:c.addr,city:c.city,pin:c.pin,state:c.state});
     const order={id:"ZL"+Date.now().toString().slice(-7),date:new Date().toISOString(),pay,cust:c,coupon:cart.coupon(),total:cart.total(pay),
-      lines:cart.items().map(x=>({n:prod(x.id).n,size:x.size,qty:x.qty,p:prod(x.id).p}))};
-    const orders=store.get("zl_orders",[]);orders.push(order);store.set("zl_orders",orders);
-    orderSync.send(order); cart.clear(); store.set("zl_coupon",""); done(order)};
+      lines:cart.items().map(x=>({id:x.id,n:prod(x.id).n,size:x.size,qty:x.qty,p:prod(x.id).p}))};
+    const btn=f.querySelector("button[type=submit]"),label=btn.textContent; btn.disabled=true; btn.textContent="Please wait…"; $("#fmsg").textContent="";
+    const finish=()=>{const orders=store.get("zl_orders",[]);orders.push(order);store.set("zl_orders",orders);cart.clear();store.set("zl_coupon","")};
+    const live=typeof ORDERS_API!=="undefined"&&ORDERS_API;
+    if(pay==="online"&&live){
+      const r=await orderSync.pay(order);
+      if(r.ok){order.total=r.total;finish();return openRzp(order,r)}
+      if(r.error==="payments not configured"){orderSync.send(order);finish();return done(order,"link")}
+      $("#fmsg").textContent=r.error==="network"?"Couldn't start the payment. Check your connection and try again, or choose cash on delivery.":"Couldn't start the payment ("+r.error+"). Please try again.";
+      btn.disabled=false;btn.textContent=label;return;
+    }
+    orderSync.send(order);finish();done(order)};
 }
-function done(o){
-  const msg=`Hi Zoro Luna! New order ${o.id}\n\n`+o.lines.map(l=>`• ${l.n} (${l.size}) × ${l.qty} — ${inr(l.p*l.qty)}`).join("\n")+`\n\nTotal: ${inr(o.total)} (${o.pay==="cod"?"Cash on delivery":"Online payment"})\n\nName: ${o.cust.name}\nPhone: ${o.cust.phone}\nAddress: ${o.cust.addr}, ${o.cust.city}, ${o.cust.state} ${o.cust.pin}`;
-  document.title="Order placed — Zoro Luna"; scrollTo(0,0);
-  $("#ck").innerHTML=`<div class="thanks"><div class="tick">✓</div><h1>Thank you, ${esc(o.cust.name.split(" ")[0])}</h1><p>Your order is saved. One last step — send it to us on WhatsApp so we can confirm and start making your pieces.</p><div class="oid">${o.id}</div><br>
-  <a class="btn solid" target="_blank" rel="noopener" href="https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}">Confirm on WhatsApp</a>
-  <p style="margin-top:1.6rem">Total ${inr(o.total)} · ${o.pay==="cod"?"Pay on delivery":"We'll send a secure payment link"}</p><a class="btn ghost" href="shop.html" style="margin-top:1rem">Continue shopping</a></div>`;
+function loadRzp(){return new Promise((ok,no)=>{if(window.Razorpay)return ok();const s=document.createElement("script");s.src="https://checkout.razorpay.com/v1/checkout.js";s.onload=ok;s.onerror=()=>no(new Error("load"));document.head.appendChild(s)})}
+async function openRzp(order,r){
+  try{await loadRzp()}catch(e){return done(order,"unpaid")}
+  let settled=false;
+  const rz=new Razorpay({key:r.keyId,amount:r.amount,currency:"INR",name:"Zoro Luna",description:"Order "+order.id,order_id:r.rzpOrderId,
+    prefill:{name:order.cust.name,email:order.cust.email,contact:order.cust.phone},theme:{color:"#9a7b3f"},
+    handler:async resp=>{settled=true;$("#ck").innerHTML='<div class="thanks"><p>Confirming your payment…</p></div>';const v=await orderSync.verify(order.id,resp);done(order,v.ok?"paid":"verify")},
+    modal:{ondismiss:()=>{if(!settled){settled=true;done(order,"unpaid")}}}});
+  rz.open();
+}
+async function retryPay(order,btn){
+  btn.disabled=true;btn.textContent="Please wait…";
+  const r=await orderSync.pay(order);
+  if(r.ok){order.total=r.total;openRzp(order,r)}else{btn.disabled=false;btn.textContent="Try payment again";$("#retryMsg").textContent="Couldn't start payment ("+r.error+"). Please try again."}
+}
+function done(o,state){
+  state=state||(o.pay==="cod"?"cod":"link");
+  const lines=o.lines.map(l=>`• ${l.n} (${l.size}) × ${l.qty} — ${inr(l.p*l.qty)}`).join("\n");
+  const wa=t=>`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(t)}`;
+  const base=`Hi Zoro Luna! Order ${o.id}\n\n${lines}\n\nTotal: ${inr(o.total)}\n\nName: ${o.cust.name}\nPhone: ${o.cust.phone}\nAddress: ${o.cust.addr}, ${o.cust.city}, ${o.cust.state} ${o.cust.pin}`;
+  document.title="Order — Zoro Luna"; scrollTo(0,0);
+  const first=esc(o.cust.name.split(" ")[0]), total=`<p style="margin-top:1.6rem">Total ${inr(o.total)}</p>`, shop='<a class="btn ghost" href="shop.html" style="margin-top:1rem">Continue shopping</a>';
+  const V={
+    paid:`<div class="tick">✓</div><h1>Payment received</h1><p>Thank you, ${first}. Your order is confirmed and we'll start making it right away. A confirmation will reach you shortly.</p><div class="oid">${o.id}</div>${total}${shop}`,
+    unpaid:`<div class="tick">!</div><h1>Payment not completed</h1><p>${first}, your order <b>${o.id}</b> is saved but not paid yet. Complete the payment to confirm it.</p><div class="oid">${o.id}</div><br><button class="btn solid" id="retry">Complete payment · ${inr(o.total)}</button><div class="msg" id="retryMsg"></div><p style="margin-top:1rem">Prefer to pay on delivery? <a style="text-decoration:underline" target="_blank" rel="noopener" href="${wa(base+"\n\nPlease switch this order to cash on delivery.")}">Message us on WhatsApp</a>.</p>${shop}`,
+    verify:`<div class="tick">✓</div><h1>Payment submitted</h1><p>${first}, we couldn't confirm your payment automatically. <b>Please don't pay again</b> — send us your order number and we'll verify it.</p><div class="oid">${o.id}</div><br><a class="btn solid" target="_blank" rel="noopener" href="${wa(base+"\n\nI've paid online — please verify.")}">Send order on WhatsApp</a>${shop}`,
+    cod:`<div class="tick">✓</div><h1>Thank you, ${first}</h1><p>Your order is placed. Send it to us on WhatsApp so we can confirm and start making your pieces.</p><div class="oid">${o.id}</div><br><a class="btn solid" target="_blank" rel="noopener" href="${wa(base+"\n(Cash on delivery)")}">Confirm on WhatsApp</a><p style="margin-top:1.6rem">Total ${inr(o.total)} · Pay on delivery</p>${shop}`,
+    link:`<div class="tick">✓</div><h1>Thank you, ${first}</h1><p>Your order is saved. Send it on WhatsApp and we'll share a secure payment link.</p><div class="oid">${o.id}</div><br><a class="btn solid" target="_blank" rel="noopener" href="${wa(base+"\n(Online payment)")}">Confirm on WhatsApp</a>${total}${shop}`
+  };
+  $("#ck").innerHTML=`<div class="thanks">${V[state]}</div>`;
+  const rb=$("#retry"); if(rb) rb.onclick=()=>retryPay(o,rb);
 }
 </script>
 </body>

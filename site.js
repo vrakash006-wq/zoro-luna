@@ -60,15 +60,25 @@ const orderSync = {
     return { id: o.id, date: o.date, status: "New", name: c.name, phone: c.phone, email: c.email, addr: c.addr, city: c.city, pin: c.pin, state: c.state,
       pay: o.pay, coupon: o.coupon || "", total: o.total, items: o.lines, tracking: "", notes: "" };
   },
+  async post(body) {
+    const r = await fetch(ORDERS_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+    return r.json();
+  },
   async send(o) {
     if (typeof ORDERS_API === "undefined" || !ORDERS_API) return false;
     try {
-      const r = await fetch(ORDERS_API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "order", order: this.flat(o), hp: "" }) });
-      const j = await r.json(); if (!j.ok && j.error !== "duplicate") throw new Error(j.error);
+      const j = await this.post({ action: "order", order: this.flat(o), hp: "" }); if (!j.ok && j.error !== "duplicate") throw new Error(j.error);
       return true;
     } catch (e) {
       const q = store.get("zl_outbox", []); if (!q.find(x => x.id === o.id)) q.push(o); store.set("zl_outbox", q); return false;
     }
+  },
+  /* online payment: server prices the order and creates the Razorpay order */
+  async pay(o) {
+    try { return await this.post({ action: "payInit", order: this.flat(o), hp: "" }) } catch (e) { return { ok: false, error: "network" } }
+  },
+  async verify(id, r) {
+    try { return await this.post({ action: "payVerify", id, razorpay_order_id: r.razorpay_order_id, razorpay_payment_id: r.razorpay_payment_id, razorpay_signature: r.razorpay_signature }) } catch (e) { return { ok: false, error: "network" } }
   },
   async flush() { const q = store.get("zl_outbox", []); if (!q.length) return; store.set("zl_outbox", []); for (const o of q) await this.send(o) }
 };
