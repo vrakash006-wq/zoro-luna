@@ -40,6 +40,7 @@ function pageInit(){
     <fieldset class="fs"><legend>Payment</legend>
       <label class="pay"><input type="radio" name="pay" value="cod" checked><span><b>Cash on delivery</b><small>Pay when it arrives · +${inr(COD_FEE)} handling</small></span></label>
       <label class="pay"><input type="radio" name="pay" value="online"><span><b>UPI / Cards / Net banking</b><small>Save ${PREPAID_OFF*100}% · secure payment by Razorpay</small></span></label>
+      <p class="note">We save your contact details as you type so we can help you finish your order if anything goes wrong.</p>
       <p class="note">Online payments are confirmed instantly. For cash on delivery, you'll send the order on WhatsApp in the next step.</p></fieldset>
     <div class="msg" id="fmsg"></div>
   </div>
@@ -49,7 +50,9 @@ function pageInit(){
     <p class="note"><a href="cart.html" style="text-decoration:underline">Edit bag</a></p></aside></form>`;
   const tots=()=>{const sub=cart.sub(),d=cart.discount(),base=sub-d,pre=pay==="online"?Math.round(base*PREPAID_OFF):0,sh=cart.shipping(),cod=pay==="cod"?COD_FEE:0;
     $("#tots").innerHTML=`<div class="r"><span>Subtotal</span><span>${inr(sub)}</span></div>${d?`<div class="r disc"><span>Coupon ${cart.coupon()}</span><span>−${inr(d)}</span></div>`:""}${pre?`<div class="r disc"><span>Prepaid saving</span><span>−${inr(pre)}</span></div>`:""}<div class="r"><span>Shipping</span><span>${sh?inr(sh):"Free"}</span></div>${cod?`<div class="r"><span>COD fee</span><span>${inr(cod)}</span></div>`:""}<div class="r t"><span>Total</span><span>${inr(cart.total(pay))}</span></div>`};
-  tots();
+  tots(); track.stage("checkout");
+  const tc=()=>{const f=$("#f").elements;track.contact({name:f.name.value.trim(),email:f.email.value.trim(),phone:f.phone.value.trim()})};
+  $("#f").addEventListener("input",()=>{clearTimeout(tc.t);tc.t=setTimeout(tc,900)});
   $("#f").addEventListener("change",e=>{if(e.target.name==="pay"){pay=e.target.value;tots()}});
   $("#f").onsubmit=async e=>{e.preventDefault();const f=e.target;
     if(!f.checkValidity()){const bad=f.querySelector("input:invalid,select:invalid");$("#fmsg").textContent="Please check the highlighted fields: "+(bad.closest(".fld")?.firstChild.textContent||"form");bad.focus();return}
@@ -57,7 +60,7 @@ function pageInit(){
     const order={id:"ZL"+Date.now().toString().slice(-7),date:new Date().toISOString(),pay,cust:c,coupon:cart.coupon(),total:cart.total(pay),
       lines:cart.items().map(x=>({id:x.id,n:prod(x.id).n,size:x.size,qty:x.qty,p:prod(x.id).p}))};
     const btn=f.querySelector("button[type=submit]"),label=btn.textContent; btn.disabled=true; btn.textContent="Please wait…"; $("#fmsg").textContent="";
-    const finish=()=>{const orders=store.get("zl_orders",[]);orders.push(order);store.set("zl_orders",orders);cart.clear();store.set("zl_coupon","")};
+    const finish=()=>{const orders=store.get("zl_orders",[]);orders.push(order);store.set("zl_orders",orders);cart.clear();store.set("zl_coupon","");track.ordered(order.id)};
     const live=typeof ORDERS_API!=="undefined"&&ORDERS_API;
     if(pay==="online"&&live){
       const r=await orderSync.pay(order);

@@ -87,10 +87,64 @@ const orderSync = {
   async flush() { const q = store.get("zl_outbox", []); if (!q.length) return; store.set("zl_outbox", []); for (const o of q) await this.send(o) }
 };
 
+/* ===== visitor tracking (first-party, anonymous until the customer types contact details at checkout) ===== */
+const track = {
+  S: null, dirty: false, t: null,
+  ok() { return typeof ORDERS_API !== "undefined" && ORDERS_API && navigator.doNotTrack !== "1" },
+  uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36) },
+  fresh() {
+    let vid = store.get("zl_vid", ""); if (!vid) { vid = this.uid(); store.set("zl_vid", vid) }
+    const q = new URLSearchParams(location.search), ua = navigator.userAgent, w = innerWidth;
+    let src = q.get("utm_source") || "", med = q.get("utm_medium") || "", ref = "";
+    try { if (document.referrer) { const h = new URL(document.referrer).hostname; if (h && h !== location.hostname) ref = h.replace(/^www\./, "") } } catch {}
+    if (!src) src = ref || "direct"; if (!med) med = q.get("utm_source") ? "campaign" : ref ? "referral" : "none";
+    return {
+      sid: this.uid() + this.uid(), vid, first: new Date().toISOString(), ts: Date.now(),
+      device: /Mobi|Android|iPhone/i.test(ua) ? "mobile" : /iPad|Tablet/i.test(ua) || (w > 700 && w < 1000) ? "tablet" : "desktop",
+      browser: /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Other",
+      os: /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad|iOS/.test(ua) ? "iOS" : /Mac OS/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "Other",
+      tz: (Intl.DateTimeFormat().resolvedOptions().timeZone || ""), source: src.slice(0, 60), medium: med.slice(0, 40), campaign: (q.get("utm_campaign") || "").slice(0, 60),
+      landing: location.pathname.replace(/\/index\.html$/, "/").slice(0, 80), pages: 0, viewed: [], cartValue: 0, cart: [], stage: "visit", contact: {}, order: ""
+    };
+  },
+  init() {
+    if (!this.ok()) return;
+    let st = store.get("zl_sess", null);
+    const isNew = !st || Date.now() - st.ts > 30 * 60 * 1000;
+    if (isNew) st = this.fresh();
+    st.ts = Date.now(); st.pages++; this.S = st; this.dirty = true;
+    const m = location.pathname.match(/product\.html$/), id = new URLSearchParams(location.search).get("id");
+    if (m && id && prod(id)) this.view(+id, true);
+    this.cartSnap(true); this.save();
+    if (isNew) this.send();
+    addEventListener("pagehide", () => this.send(true)); document.addEventListener("visibilitychange", () => { if (document.hidden) this.send(true) });
+  },
+  save() { if (this.S) store.set("zl_sess", this.S) },
+  up(stage) { const r = ["visit", "product", "cart", "checkout", "contact", "ordered"]; if (r.indexOf(stage) > r.indexOf(this.S.stage)) { this.S.stage = stage; this.dirty = true } },
+  view(id, quiet) { const s = this.S; if (!s) return; if (!s.viewed.includes(id)) { s.viewed.push(id); if (s.viewed.length > 20) s.viewed.shift() } this.up("product"); this.dirty = true; this.save(); if (!quiet) this.later() },
+  cartSnap(quiet) {
+    const s = this.S; if (!s) return; const a = cart.items();
+    s.cart = a.map(x => ({ id: x.id, size: x.size, qty: x.qty })); s.cartValue = cart.sub();
+    if (a.length) this.up("cart"); this.dirty = true; this.save(); if (!quiet) this.later(900);
+  },
+  cartUpdate() { if (this.S) this.cartSnap() },
+  stage(n) { if (!this.S) return; this.up(n); this.save(); this.later(400) },
+  contact(c) {
+    if (!this.S) return; const ok = /.+@.+\..+/.test(c.email || "") || /^[6-9]\d{9}$/.test(c.phone || "");
+    if (!ok) return; this.S.contact = { name: (c.name || "").slice(0, 80), email: (c.email || "").slice(0, 120), phone: (c.phone || "").slice(0, 15) }; this.up("contact"); this.dirty = true; this.save(); this.later(1500);
+  },
+  ordered(id) { if (!this.S) return; this.S.order = id; this.up("ordered"); this.save(); this.dirty = true; this.send() },
+  later(ms = 1200) { clearTimeout(this.t); this.t = setTimeout(() => this.send(), ms) },
+  send(unload) {
+    if (!this.S || !this.dirty) return; this.dirty = false; this.S.ts = Date.now(); this.save();
+    try { fetch(ORDERS_API, { method: "POST", mode: "no-cors", keepalive: true, headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "track", s: this.S }) }).catch(() => {}) } catch {}
+  }
+};
+
 /* ===== cart ===== */
 const cart = {
   items() { return store.get("zl_cart", []).filter(x => prod(x.id)) },
-  save(a) { store.set("zl_cart", a); renderBag(); document.dispatchEvent(new Event("cart:change")) },
+  save(a) { store.set("zl_cart", a); renderBag(); document.dispatchEvent(new Event("cart:change")); track.cartUpdate() },
   add(id, size, qty = 1) {
     const a = this.items(), f = a.find(x => x.id == id && x.size === size);
     f ? f.qty = Math.min(10, f.qty + qty) : a.push({ id: +id, size, qty });
@@ -191,4 +245,11 @@ function initFx() {
   }), { threshold: .25 });
   $$("video[data-lazy]").forEach(v => vo.observe(v));
 }
-document.addEventListener("DOMContentLoaded", () => { renderChrome(); window.pageInit && pageInit(); initFx(); orderSync.flush() });
+/* cart recovery link:  cart.html?r=5.M.1,7.L.2  (built by the admin dashboard) */
+function restoreCart() {
+  const r = new URLSearchParams(location.search).get("r"); if (!r) return false;
+  const items = r.split(",").map(x => x.split(".")).filter(x => prod(x[0]) && SIZES.includes(x[1])).map(x => ({ id: +x[0], size: x[1], qty: Math.max(1, Math.min(10, +x[2] || 1)) })).slice(0, 20);
+  if (!items.length) return false;
+  store.set("zl_cart", items); history.replaceState(null, "", location.pathname); return true;
+}
+document.addEventListener("DOMContentLoaded", () => { restoreCart(); renderChrome(); track.init(); window.pageInit && pageInit(); initFx(); orderSync.flush() });
